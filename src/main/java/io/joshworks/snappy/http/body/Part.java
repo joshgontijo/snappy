@@ -39,11 +39,11 @@ public final class Part {
     private static final Logger logger = LoggerFactory.getLogger(LOGGER_NAME);
 
     private String name;
-    private PartFile partFile;
+    private FilePart filePart;
     private MediaType contentType;
-    private boolean isFile;
+    private boolean file;
     private String value;
-    private boolean valid = false;
+    private boolean valid;
 
     Part() {
     }
@@ -57,27 +57,26 @@ public final class Part {
         this.name = name;
         HeaderMap headers = formValue.getHeaders();
         contentType = getMediaType(headers);
-        isFile = formValue.isFileItem();
-        if (isFile) {
-            Path path = formValue.getFileItem().getFile();
-            String fileName = formValue.getFileName();
-            long size = getSize(path);
-            partFile = new PartFile(path, fileName, size, contentType);
-
-        } else {
+        file = formValue.isFileItem();
+        if (!file) {
             value = formValue.getValue();
+            return;
         }
+        Path path = formValue.getFileItem().getFile();
+        String fileName = formValue.getFileName();
+        long size = getSize(path);
+        filePart = new FilePart(path, fileName, size, contentType);
     }
 
     public String value() {
         return value;
     }
 
-    public PartFile file() {
-        if (!isFile) {
+    public FilePart file() {
+        if (!file) {
             logger.warn("Part is not a file, null will be returned");
         }
-        return partFile;
+        return filePart;
     }
 
     public MediaType type() {
@@ -89,7 +88,7 @@ public final class Part {
     }
 
     public boolean isFile() {
-        return isFile;
+        return file;
     }
 
     public String name() {
@@ -106,7 +105,7 @@ public final class Part {
     }
 
     private MediaType getMediaType(HeaderMap headers) {
-        if(headers == null) {
+        if (headers == null) {
             return null;
         }
         HeaderValues headerValues = headers.get(Headers.CONTENT_TYPE);

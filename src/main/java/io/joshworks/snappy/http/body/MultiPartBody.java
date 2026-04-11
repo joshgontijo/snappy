@@ -36,9 +36,7 @@ public class MultiPartBody implements Iterable<Part> {
         if (formData == null) {
             return parts;
         }
-        Iterator<String> iterator = formData.iterator();
-        while (iterator.hasNext()) {
-            String next = iterator.next();
+        for (String next : formData) {
             Deque<FormData.FormValue> formValues = formData.get(next);
             for (FormData.FormValue value : formValues) {
                 parts.add(new Part(value, next));

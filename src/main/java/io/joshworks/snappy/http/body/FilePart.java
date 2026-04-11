@@ -28,14 +28,14 @@ import java.nio.file.StandardOpenOption;
 /**
  * Created by Josh Gontijo on 3/22/17.
  */
-public class PartFile {
+public class FilePart {
 
     private final Path path;
     private final String fileName;
     private final long size;
-    private MediaType contentType;
+    private final MediaType contentType;
 
-    public PartFile(Path path, String fileName, long size, MediaType contentType) {
+    public FilePart(Path path, String fileName, long size, MediaType contentType) {
         this.path = path;
         this.fileName = fileName;
         this.size = size;
