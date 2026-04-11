@@ -36,7 +36,7 @@ public class PlainTextParser implements Parser {
 
     @Override
     public String writeValue(Object input) {
-        return input == null ? null : String.valueOf(input);
+        return input == null ? "" : String.valueOf(input);
     }
 
 }

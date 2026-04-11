@@ -33,9 +33,7 @@ public class ExceptionResponse implements Serializable {
     }
 
     public static <T extends Exception> ExceptionResponse of(ErrorContext<T> e) {
-        // Do not include the raw exception message in the response to prevent information leakage.
-        // The error ID can be used to correlate with server logs.
-        return new ExceptionResponse(e.id, "An error occurred. Reference ID: " + e.id);
+        return new ExceptionResponse(e.id, e.exception.getMessage());
     }
 
     @Override

@@ -573,7 +573,8 @@ public class SnappyServer {
      * @param maxConnections Maximum number of concurrent SSE connections allowed
      */
     public static synchronized SseBroadcaster sse(int maxConnections) {
-        return sse(HandlerUtil.BASE_PATH, sse -> {}, maxConnections);
+        return sse(HandlerUtil.BASE_PATH, sse -> {
+        }, maxConnections);
     }
 
     /**
@@ -583,7 +584,8 @@ public class SnappyServer {
      * @param url The url this endpoint will be available
      */
     public static synchronized SseBroadcaster sse(String url) {
-        return sse(url, sse -> {});
+        return sse(url, sse -> {
+        });
     }
 
     /**
@@ -593,7 +595,8 @@ public class SnappyServer {
      * @param maxConnections Maximum number of concurrent SSE connections allowed
      */
     public static synchronized SseBroadcaster sse(String url, int maxConnections) {
-        return sse(url, sse -> {}, maxConnections);
+        return sse(url, sse -> {
+        }, maxConnections);
     }
 
     /**
@@ -706,15 +709,15 @@ public class SnappyServer {
             AppProperties.load();
             overrideFromProps();
 
+            Parsers.clear();
             Parsers.register(MediaType.APPLICATION_JSON_TYPE, new JsonParser());
             Parsers.register(MediaType.TEXT_PLAIN_TYPE, new PlainTextParser());
 
-            Undertow.Builder serverBuilder = Undertow.builder();
-
-
             worker = Xnio.getInstance().createWorker(optionBuilder.getMap());
-            serverBuilder.setWorker(worker);
-            serverBuilder.setServerOption(UndertowOptions.MAX_ENTITY_SIZE, maxEntitySize);
+            Undertow.Builder serverBuilder = Undertow.builder()
+                    .setWorker(worker)
+                    .setServerOption(UndertowOptions.MAX_ENTITY_SIZE, maxEntitySize);
+
 
             //Extension are capable of adding / removing mapped endpoints,
             // therefore they must execute before the handler resolution

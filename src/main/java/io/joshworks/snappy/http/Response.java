@@ -157,8 +157,7 @@ public class Response {
     }
 
     public static Response internalServerError(String errorId, Exception e) {
-        // Do not expose raw exception message — use error ID for log correlation only
-        return internalServerError().body(new ExceptionResponse(errorId, "An error occurred. Reference ID: " + errorId));
+        return internalServerError().body(new ExceptionResponse(errorId, e.getMessage()));
     }
 
     public static Response unauthorized() {
@@ -344,7 +343,11 @@ public class Response {
                 if (responseParser == null) {
                     throw new RuntimeException("Could not find Parser for type " + response.mediaType.toString());
                 }
-                exchange.getResponseSender().send(responseParser.writeValue(body));
+                String serialized = responseParser.writeValue(body);
+                if (serialized == null) {
+                    throw new RuntimeException("Parser " + responseParser.getClass().getSimpleName() + " returned null for body of type " + body.getClass().getName());
+                }
+                exchange.getResponseSender().send(serialized);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

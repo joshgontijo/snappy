@@ -49,18 +49,19 @@ public class HttpEntrypoint implements HttpHandler {
                 exchange.putAttachment(HttpDispatcher.RESPONSE, response);
             }
         } catch (Exception e) {
+            Exception exception = e;
             if (exchange.isResponseChannelAvailable() && !exchange.isResponseComplete()) {
                 //unwraps the original caught from RestConsumer
-                if (e instanceof ApplicationException) {
-                    e = ((ApplicationException) e).original;
+                if (exception instanceof ApplicationException) {
+                    exception = ((ApplicationException) exception).original;
                 }
 
                 String errorId = ErrorContext.errorId();
-                logger.error(HandlerUtil.exceptionMessageTemplate(errorId, exchange, "Application error"), e);
-                Response response = exceptionMapper.apply(errorId, e, request);
+                logger.error(HandlerUtil.exceptionMessageTemplate(errorId, exchange, "Application error"), exception);
+                Response response = exceptionMapper.apply(errorId, exception, request);
                 exchange.putAttachment(HttpDispatcher.RESPONSE, response);
             } else {
-                logger.error(e.getMessage(), e);
+                logger.error(exception.getMessage(), exception);
                 exchange.putAttachment(HttpDispatcher.RESPONSE, Response.internalServerError());
             }
         }

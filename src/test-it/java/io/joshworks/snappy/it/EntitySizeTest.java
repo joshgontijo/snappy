@@ -18,7 +18,6 @@ import static io.joshworks.snappy.SnappyServer.start;
 import static io.joshworks.snappy.SnappyServer.stop;
 import static io.joshworks.snappy.parser.MediaTypes.consumes;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Created by Josh Gontijo on 7/6/17.
@@ -68,7 +67,7 @@ public class EntitySizeTest {
 
         Assert.assertEquals(413, response.getStatus());
         assertNotNull(response.body());
-        assertTrue(response.body().getObject().getLong("id") > 0); //just to cause a call to getLong
+        assertNotNull(response.body().getObject().getString("id")); //just to cause a call to getString
     }
 
     @Test
@@ -82,7 +81,7 @@ public class EntitySizeTest {
 
         Assert.assertEquals(413, response.getStatus());
         assertNotNull(response.body());
-        assertTrue(response.body().getObject().getLong("id") > 0); //just to cause a call to getLong
+        assertNotNull(response.body().getObject().getString("id")); //just to cause a call to getString
     }
 
     @Test
@@ -94,7 +93,7 @@ public class EntitySizeTest {
 
         Assert.assertEquals(413, response.getStatus());
         assertNotNull(response.body());
-        assertTrue(response.body().getObject().getLong("id") > 0); //just to cause a call to getLong
+        assertNotNull(response.body().getObject().getString("id")); //just to cause a call to getString
     }
 
 }

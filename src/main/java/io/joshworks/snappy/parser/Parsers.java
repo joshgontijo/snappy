@@ -50,7 +50,7 @@ public class Parsers {
         Objects.requireNonNull(mediaType, "MediaType must be provided");
         Objects.requireNonNull(parser, "Parser must be provided");
 
-        logger.info("Registering Parser '{}' for type {}", parser.getClass().getSimpleName(), mediaType.toString());
+        logger.info("Registering Parser '{}' for type {}", parser.getClass().getSimpleName(), mediaType);
         available.put(mediaType, parser);
     }
 
@@ -82,7 +82,13 @@ public class Parsers {
         public int compare(MediaType first, MediaType second) {
             int firstRank = getRank(first);
             int secondRank = getRank(second);
-            return firstRank == secondRank ? 1 : firstRank - secondRank;
+            if (firstRank != secondRank) {
+                return firstRank - secondRank;
+            }
+            // Same specificity rank: use the full media type string for a stable, consistent ordering.
+            // Returning 0 for identical types ensures ConcurrentSkipListMap replaces existing entries
+            // rather than inserting duplicates.
+            return first.toString().compareToIgnoreCase(second.toString());
         }
 
         public int getRank(MediaType type) {
