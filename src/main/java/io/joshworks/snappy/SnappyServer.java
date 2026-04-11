@@ -68,9 +68,34 @@ import java.util.function.Supplier;
 import static io.joshworks.snappy.handler.HandlerUtil.BASE_PATH;
 import static io.undertow.UndertowOptions.DEFAULT_MAX_ENTITY_SIZE;
 
-/**
- * Created by josh on 3/5/17.
- */
+/// Static façade for configuring and starting an embedded [Undertow](https://undertow.io) HTTP server.
+///
+/// ## Quick Start
+///
+/// ```java
+/// import static io.joshworks.snappy.SnappyServer.*;
+///
+/// get("/hello", req -> Response.ok("Hello, World!"));
+/// start();
+/// ```
+///
+/// ## Configuration
+///
+/// All configuration methods **must** be called before [start()][SnappyServer#start()].
+/// Calling any configuration method after the server has started throws [IllegalStateException].
+///
+/// ## Server Lifecycle
+///
+/// 1. Register endpoints, interceptors, and options.
+/// 2. Call [start()][SnappyServer#start()] — the server binds on the configured port (default `9000`)
+///    and a separate admin port (default `9100`).
+/// 3. Call [stop()][SnappyServer#stop()] to gracefully shut down; the singleton is reset so
+///    the server can be started again.
+///
+/// ## Thread Safety
+///
+/// All public static methods are `synchronized`. The server uses a double-checked locking singleton;
+/// a fresh instance is created each time the server is started after a previous stop.
 public class SnappyServer {
 
     public static final String LOGGER_NAME = "snappy";
@@ -130,370 +155,469 @@ public class SnappyServer {
         return INSTANCE;
     }
 
+    /// Starts the HTTP server.
+    ///
+    /// Loads `snappy.properties`, applies property overrides, registers default parsers,
+    /// resolves all endpoints and interceptors, then binds on the configured port.
+    /// Fires all [onStart][SnappyServer#onStart(Runnable)] listeners after the server is ready.
+    ///
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void start() {
         instance().startServer();
     }
 
+    /// Stops the HTTP server and resets the singleton instance.
+    ///
+    /// Stops the Undertow server, shuts down the XNIO worker, then fires all
+    /// [onShutdown][SnappyServer#onShutdown(Runnable)] listeners.
+    /// Safe to call even when the server is not running.
     public static synchronized void stop() {
         instance().stopServer();
         INSTANCE = null;
     }
 
+    /// Sets the TCP `NO_DELAY` socket option.
+    ///
+    /// When `true`, disables Nagle's algorithm so small packets are sent immediately.
+    ///
+    /// @param tcpNoDelay `true` to disable Nagle's algorithm
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void tcpNoDeplay(boolean tcpNoDelay) {
         checkStarted();
         instance().optionBuilder.set(Options.TCP_NODELAY, tcpNoDelay);
     }
 
-    public static synchronized void keepAlive(boolean tcpNoDelay) {
+    /// Sets the TCP `KEEP_ALIVE` socket option.
+    ///
+    /// @param keepAlive `true` to enable TCP keep-alive probes
+    /// @throws IllegalStateException if the server is already running
+    public static synchronized void keepAlive(boolean keepAlive) {
         checkStarted();
-        instance().optionBuilder.set(Options.KEEP_ALIVE, tcpNoDelay);
+        instance().optionBuilder.set(Options.KEEP_ALIVE, keepAlive);
     }
 
+    /// Sets the read timeout in milliseconds for incoming connections.
+    ///
+    /// @param timeout read timeout in milliseconds; `0` means no timeout
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void readTimeout(int timeout) {
         checkStarted();
         instance().optionBuilder.set(Options.READ_TIMEOUT, timeout);
     }
 
+    /// Controls whether the server socket address can be reused immediately after the server stops.
+    ///
+    /// @param reuseAddress `true` to enable `SO_REUSEADDR`
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void reuseAddress(boolean reuseAddress) {
         checkStarted();
         instance().optionBuilder.set(Options.REUSE_ADDRESSES, reuseAddress);
     }
 
+    /// Sets the maximum allowed size in bytes for a single HTTP request entity body.
+    ///
+    /// Requests that exceed this limit receive a `413 Request Entity Too Large` response.
+    /// Defaults to Undertow's [DEFAULT_MAX_ENTITY_SIZE][io.undertow.UndertowOptions#DEFAULT_MAX_ENTITY_SIZE].
+    ///
+    /// @param maxEntitySize maximum body size in bytes
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void maxEntitySize(long maxEntitySize) {
         checkStarted();
         instance().maxEntitySize = maxEntitySize;
     }
 
+    /// Sets the maximum allowed size in bytes for a single multipart file upload.
+    ///
+    /// Individual parts that exceed this limit cause a `413 Request Entity Too Large` response.
+    ///
+    /// @param maxMultipartSize maximum individual part size in bytes
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void maxMultipartSize(long maxMultipartSize) {
         checkStarted();
         instance().maxMultipartSize = maxMultipartSize;
     }
 
+    /// Overrides the admin server port (default `9100`).
+    ///
+    /// @param adminPort the port for the admin HTTP listener
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void adminPort(int adminPort) {
         checkStarted();
         instance().adminManager.setPort(adminPort);
     }
 
+    /// Overrides the bind address for the admin HTTP listener (default `127.0.0.1`).
+    ///
+    /// @param address the bind address for the admin listener
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void adminAddress(String address) {
         checkStarted();
         instance().adminManager.setBindAddress(address);
     }
 
+    /// Sets the HTTP port the server listens on (default `9000`).
+    ///
+    /// @param port the HTTP port
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void port(int port) {
         checkStarted();
         instance().port = port;
     }
 
+    /// Applies a port offset to both the main HTTP port and the admin port.
+    ///
+    /// Resulting port = `9000 + offset`; resulting admin port = `9100 + offset`.
+    /// Useful for running multiple instances on the same host.
+    ///
+    /// @param offset the value added to the default ports
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void portOffset(int offset) {
         checkStarted();
         instance().port = DEFAULT_PORT + offset;
         instance().adminManager.setPort(AdminManager.ADMIN_PORT + offset);
     }
 
+    /// Sets the bind address for the main HTTP listener (default `0.0.0.0`).
+    ///
+    /// @param address the bind address, e.g. `"127.0.0.1"` to listen only on loopback
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void address(String address) {
         checkStarted();
         instance().bindAddress = address;
     }
 
+    /// Sets the number of XNIO I/O threads.
+    ///
+    /// Defaults to the number of available processors.
+    ///
+    /// @param ioThreads number of I/O threads
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void ioThreads(int ioThreads) {
         checkStarted();
         instance().optionBuilder.set(Options.WORKER_IO_THREADS, ioThreads);
     }
 
+    /// Sets the core and maximum worker thread counts for the XNIO thread pool.
+    ///
+    /// @param coreThreads minimum number of threads kept alive in the pool
+    /// @param maxThreads  maximum number of threads allowed in the pool
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void workerThreads(int coreThreads, int maxThreads) {
         checkStarted();
         instance().optionBuilder.set(Options.WORKER_TASK_CORE_THREADS, coreThreads);
         instance().optionBuilder.set(Options.WORKER_TASK_MAX_THREADS, maxThreads);
     }
 
+    /// Sets the core, maximum, and keep-alive time for the XNIO worker thread pool.
+    ///
+    /// @param coreThreads      minimum number of threads kept alive in the pool
+    /// @param maxThreads       maximum number of threads allowed in the pool
+    /// @param keepAliveMillis  time in milliseconds that idle threads above `coreThreads` are kept alive
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void workerThreads(int coreThreads, int maxThreads, int keepAliveMillis) {
         checkStarted();
         workerThreads(coreThreads, maxThreads);
         instance().optionBuilder.set(Options.WORKER_TASK_KEEPALIVE, keepAliveMillis);
     }
 
+    /// Enables the HTTP request/response tracer which logs every exchange at `DEBUG` level.
+    ///
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void enableTracer() {
         checkStarted();
         instance().httpTracer = true;
     }
 
+    /// Returns the mutable XNIO [OptionMap.Builder][org.xnio.OptionMap.Builder] for advanced tuning.
+    ///
+    /// Options set on the returned builder take effect when the server starts.
+    ///
+    /// @return the XNIO option map builder
+    /// @throws IllegalStateException if the server is already running
     public static synchronized OptionMap.Builder xnioOptions() {
         checkStarted();
         return instance().optionBuilder;
     }
 
-    /**
-     * Register an error interceptor that captures original thrown from endpoints, allowing to change the http response.
-     * The default response is mapped to any {@link Exception} and returns an {@link HttpException} body
-     *
-     * @param <T>       The exception type
-     * @param exception The original type that will trigger the handler
-     * @param handler   The handler that handles the original and send the appropriate response.
-     */
+    /// Registers a custom exception handler for the given exception type.
+    ///
+    /// When an endpoint throws an exception of type `T` (or a subtype), the provided
+    /// `handler` is invoked instead of the default `500 Internal Server Error` response.
+    ///
+    /// ```java
+    /// exception(IllegalArgumentException.class, (e, req) ->
+    ///     Response.badRequest().body(e.getMessage()));
+    /// ```
+    ///
+    /// @param <T>       the exception type
+    /// @param exception the class of the exception to handle
+    /// @param handler   the handler invoked with the error context and the original request
+    /// @throws IllegalStateException if the server is already running
     public static synchronized <T extends Exception> void exception(Class<T> exception, ErrorHandler<T> handler) {
         checkStarted();
         instance().exceptionMapper.put(exception, handler);
     }
 
-    /**
-     * Set the base path for REST endpoints only. This configuration has no effect on ws, sse, staticFiles and multipart endpoints
-     *
-     * @param basePath The base path for the REST endpoints
-     */
+    /// Sets a base path that is prepended to all REST endpoint URLs.
+    ///
+    /// This has **no effect** on WebSocket, SSE, static-files, or multipart endpoints.
+    ///
+    /// ```java
+    /// basePath("/api/v1");
+    /// get("/users", req -> Response.ok()); // reachable at /api/v1/users
+    /// ```
+    ///
+    /// @param basePath the path prefix, e.g. `"/api/v1"`
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void basePath(String basePath) {
         checkStarted();
         instance().basePath = HandlerUtil.parseUrl(basePath);
     }
 
-    /**
-     * @param groupPath The path to be used by the endpoints declared under this group
-     * @param group     The grouped endpoints, meant to be used as lambda function.
-     */
+    /// Groups a set of endpoint registrations under a common path prefix.
+    ///
+    /// ```java
+    /// group("/api", () -> {
+    ///     get("/users", req -> Response.ok());  // /api/users
+    ///     post("/users", req -> Response.created()); // /api/users
+    /// });
+    /// ```
+    ///
+    /// @param groupPath the path prefix for all endpoints declared inside `group`
+    /// @param group     a lambda that registers the grouped endpoints
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void group(String groupPath, Group group) {
         checkStarted();
         HandlerUtil.group(groupPath, group);
     }
 
-
-    /**
-     * Adds an interceptor that executes before any other handler.
-     *
-     * @param url      The URL pattern the interceptor will execute, only exact matches and wildcard (*) is allowed
-     * @param consumer The code to be executed when a URL matches the provided pattern
-     */
+    /// Registers a root request interceptor that runs **before all other handlers** for URLs matching `url`.
+    ///
+    /// The interceptor can inspect or modify the request, or abort it entirely via
+    /// [RequestContext#abortWith(Response)][io.joshworks.snappy.http.RequestContext].
+    /// Only exact URL matches and wildcard (`*`) patterns are supported.
+    ///
+    /// @param url      the URL pattern, e.g. `"/*"` or `"/api/admin/*"`
+    /// @param consumer the code to execute when the pattern matches
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void beforeAll(String url, Consumer<RequestContext> consumer) {
         checkStarted();
         instance().interceptors.addRoot(new RequestInterceptor(HandlerUtil.parseUrl(url), consumer));
     }
 
-    /**
-     * Adds an interceptor that returns 401 status code when the 'Authorization' header value does not match the type or the expected value.
-     *
-     * @param url      The URL pattern the interceptor will execute, only exact matches and wildcard (*) is allowed
-     * @param type     The 'Authorization' value prefix to match against, 'Basic', 'Bearer', etc
-     * @param expected The expected value supplier
-     */
+    /// Registers a security interceptor that enforces `Authorization` header validation.
+    ///
+    /// Returns `401 Unauthorized` when the header's scheme does not equal `type` or
+    /// when `expected.get()` does not match the credential value.
+    ///
+    /// @param url      the URL pattern to protect
+    /// @param type     the expected `Authorization` scheme prefix (`"Basic"`, `"Bearer"`, etc.)
+    /// @param expected a supplier returning the expected credential value
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void secured(String url, String type, Supplier<String> expected) {
         secured(url, (s, s2) -> s.equals(type) && s2.equals(expected.get()));
     }
 
-    /**
-     * Adds an interceptor that returns 401 status code when the 'Authorization' header value does not match the type or the expected value.
-     *
-     * @param url           The URL pattern the interceptor will execute, only exact matches and wildcard (*) is allowed
-     * @param authenticator The authenticator that accepts the 'type' and the value 'value' of the Authorization header.
-     *                      If it evaluates to false, then 401 is returned
-     */
+    /// Registers a security interceptor using a custom `Authorization` header predicate.
+    ///
+    /// The `authenticator` receives the scheme and the credential value.
+    /// Returns `401 Unauthorized` when it evaluates to `false`.
+    ///
+    /// @param url           the URL pattern to protect
+    /// @param authenticator a predicate that receives `(scheme, credential)` and returns `true` to allow the request
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void secured(String url, BiPredicate<String, String> authenticator) {
         checkStarted();
         instance().interceptors.addRoot(Interceptors.secured(url, authenticator));
     }
 
-    /**
-     * Adds an interceptor that returns 401 status code when the 'Authorization' header value does not match the type or the expected value.
-     *
-     * @param url                  The URL pattern the interceptor will execute, only exact matches and wildcard (*) is allowed
-     * @param userPswAuthenticator The username and password authenticator, when return is false the request is aborted with 401
-     */
+    /// Registers an HTTP Basic Authentication interceptor.
+    ///
+    /// The `Authorization` header is decoded and the decoded `username` and `password` are
+    /// passed to `userPswAuthenticator`. Returns `401 Unauthorized` when it evaluates to `false`.
+    ///
+    /// @param url                  the URL pattern to protect
+    /// @param userPswAuthenticator a predicate that receives `(username, password)` and returns `true` to allow
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void basicAuthSecured(String url, BiPredicate<String, String> userPswAuthenticator) {
         checkStarted();
         instance().interceptors.addRoot(Interceptors.basicAuthentication(url, userPswAuthenticator));
     }
 
-    /**
-     * Adds an interceptor that executed right before the endpoint.
-     *
-     * @param url      The URL pattern the interceptor will execute, only exact matches and wildcard (*) is allowed
-     * @param consumer The code to be executed when a URL matches the provided pattern
-     */
+    /// Registers a request interceptor that runs immediately **before** the matched endpoint handler.
+    ///
+    /// Unlike [beforeAll][SnappyServer#beforeAll(String, Consumer)], this interceptor executes
+    /// after the root interceptors and only for the matched route.
+    ///
+    /// @param url      the URL pattern the interceptor applies to
+    /// @param consumer the code to execute when the pattern matches
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void before(String url, Consumer<RequestContext> consumer) {
         checkStarted();
         instance().interceptors.add(new RequestInterceptor(HandlerUtil.parseUrl(url), consumer));
     }
 
-    /**
-     * Adds an interceptor that executed after the endpoint, changes to {@link Request} has no effect.
-     *
-     * @param url      The URL pattern the interceptor will execute, only exact matches and wildcard (*) is allowed
-     * @param consumer The code to be executed when a URL matches the provided pattern
-     */
+    /// Registers a response interceptor that runs **after** the endpoint handler.
+    ///
+    /// Modifications to the [Request][io.joshworks.snappy.http.Request] have no effect at this point.
+    /// Use the [Response][io.joshworks.snappy.http.Response] parameter to add or modify response headers.
+    ///
+    /// @param url      the URL pattern the interceptor applies to
+    /// @param consumer a consumer that receives `(request, response)` after the handler executes
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void after(String url, BiConsumer<RequestContext, Response> consumer) {
         checkStarted();
         instance().interceptors.add(new ResponseInterceptor(HandlerUtil.parseUrl(url), consumer));
     }
 
-    /**
-     * Enable CORS by setting:
-     * <ul>
-     * <li>Access-Control-Allow-Origin: *</li>
-     * <li>Access-Control-Allow-Credentials: true</li>
-     * <li>Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD</li>
-     * <li>Access-Control-Allow-Headers: Origin, Accept, X-Requested-With, Content-Type, Authorization, Access-Control-Request-Method, Access-Control-Request-Headers</li>
-     * </ul>
-     * <p>
-     * For custom headers, use {@link SnappyServer#before(String, Consumer)}
-     */
+    /// Enables CORS by adding a root interceptor that sets the following headers on every response:
+    ///
+    /// | Header | Value |
+    /// |--------|-------|
+    /// | `Access-Control-Allow-Origin` | `*` |
+    /// | `Access-Control-Allow-Credentials` | `true` |
+    /// | `Access-Control-Allow-Methods` | `GET, POST, PUT, DELETE, OPTIONS, HEAD` |
+    /// | `Access-Control-Allow-Headers` | `Origin, Accept, X-Requested-With, Content-Type, Authorization, ...` |
+    ///
+    /// `OPTIONS` preflight requests are answered immediately with `200 OK`.
+    /// For custom CORS headers use [before(String, Consumer)][SnappyServer#before(String, Consumer)] instead.
+    ///
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void cors() {
         checkStarted();
         instance().interceptors.addRoot(Interceptors.cors());
         instance().adminManager.interceptors.addRoot(Interceptors.cors());
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP GET
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param handler    The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `GET` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL, e.g. `"/users/{id}"`
+    /// @param handler    the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void get(String url, Handler handler, MediaTypes... mediaTypes) {
         addResource(Methods.GET, url, handler, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP POST
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `POST` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void post(String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.POST, url, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP PUT
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `PUT` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void put(String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.PUT, url, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP DELETE
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `DELETE` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void delete(String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.DELETE, url, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP OPTIONS
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers an `OPTIONS` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void options(String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.OPTIONS, url, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP HEAD
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `HEAD` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void head(String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.HEAD, url, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP GET with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `GET` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void get(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.GET, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP POST with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `POST` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void post(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.POST, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP PUT with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `PUT` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void put(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.PUT, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP DELETE with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `DELETE` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void delete(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.DELETE, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP OPTIONS with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers an `OPTIONS` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void options(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.OPTIONS, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP HEAD with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `HEAD` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void head(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.HEAD, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP PATCH with default path "/" as url
-     *
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `PATCH` endpoint at the root path (`/`).
+    ///
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void patch(Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.PATCH, HandlerUtil.BASE_PATH, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to HTTP HEAD
-     *
-     * @param url        The relative URL to be map this endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers a `PATCH` endpoint at the given URL.
+    ///
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void patch(String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(Methods.PATCH, url, endpoint, mediaTypes);
     }
 
-    /**
-     * Define a REST endpoint mapped to the specified HTTP method with default path "/" as url
-     *
-     * @param method     The HTTP method
-     * @param url        The relative URL of the endpoint.
-     * @param endpoint   The endpoint handler
-     * @param mediaTypes (Optional) The accepted and returned types for this endpoint
-     */
+    /// Registers an endpoint for any HTTP method at the given URL.
+    ///
+    /// ```java
+    /// add(Methods.TRACE, "/trace", req -> Response.ok());
+    /// ```
+    ///
+    /// @param method     the HTTP method
+    /// @param url        the relative URL
+    /// @param endpoint   the request handler
+    /// @param mediaTypes optional consumed/produced media type constraints
     public static void add(HttpString method, String url, Handler endpoint, MediaTypes... mediaTypes) {
         addResource(method, url, endpoint, mediaTypes);
     }
@@ -503,23 +627,30 @@ public class SnappyServer {
         instance().endpoints.add(HandlerUtil.rest(method, url, instance().maxMultipartSize, endpoint, instance().exceptionMapper, mediaTypes));
     }
 
-    /**
-     * Define a Websocket endpoint. Supports path variables
-     *
-     * @param url      The relative URL to be map this endpoint.
-     * @param endpoint The endpoint handler
-     */
+    /// Registers a WebSocket endpoint using a raw Undertow [AbstractReceiveListener].
+    ///
+    /// Path variables are supported, e.g. `"/chat/{room}"`.
+    ///
+    /// @param url      the relative URL for the WebSocket upgrade
+    /// @param endpoint the low-level receive listener
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void websocket(String url, AbstractReceiveListener endpoint) {
         checkStarted();
         instance().endpoints.add(HandlerUtil.websocket(url, endpoint));
     }
 
-    /**
-     * A simplified Websocket endpoint. Supports path variables
-     *
-     * @param url       The relative URL to be map this endpoint.
-     * @param onMessage The handler for when a new message is received
-     */
+    /// Registers a simplified WebSocket endpoint that handles text messages only.
+    ///
+    /// Path variables are supported.
+    ///
+    /// ```java
+    /// websocket("/chat", (channel, message) ->
+    ///     WebSockets.sendText("echo: " + message.getData(), channel, null));
+    /// ```
+    ///
+    /// @param url       the relative URL for the WebSocket upgrade
+    /// @param onMessage handler invoked for each full text message received
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void websocket(String url, BiConsumer<WebSocketChannel, BufferedTextMessage> onMessage) {
         checkStarted();
         instance().endpoints.add(HandlerUtil.websocket(url, new WebsocketEndpoint() {
@@ -535,99 +666,98 @@ public class SnappyServer {
         }));
     }
 
-    /**
-     * Define a Websocket endpoint. Supports path variables
-     *
-     * @param url      The relative URL to be map this endpoint.
-     * @param endpoint The endpoint handler
-     */
+    /// Registers a WebSocket endpoint using a [WebsocketEndpoint] handler.
+    ///
+    /// Path variables are supported.
+    ///
+    /// @param url      the relative URL for the WebSocket upgrade
+    /// @param endpoint the endpoint handler
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void websocket(String url, WebsocketEndpoint endpoint) {
         checkStarted();
         instance().endpoints.add(HandlerUtil.websocket(url, endpoint));
     }
 
-    /**
-     * Define a Server sent events endpoint without a handler at base path of the root or current endpoint group.
-     * Clients connected to this server will only be able to receive message via {@link SseBroadcaster#broadcast(String)}
-     */
+    /// Registers a Server-Sent Events endpoint at the root path (`/`) with no connect handler.
+    ///
+    /// Clients connect only to receive broadcasts via the returned [SseBroadcaster].
+    ///
+    /// @return the broadcaster used to push events to all connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse() {
         return sse(HandlerUtil.BASE_PATH);
     }
 
-    /**
-     * Define a Server sent events endpoint without a handler at base path.
-     *
-     * @param maxConnections Maximum number of concurrent SSE connections allowed
-     */
+    /// Registers a Server-Sent Events endpoint at the root path (`/`) with a maximum connection limit.
+    ///
+    /// @param maxConnections maximum number of concurrent SSE connections allowed
+    /// @return the broadcaster used to push events to connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(int maxConnections) {
         return sse(HandlerUtil.BASE_PATH, sse -> {
         }, maxConnections);
     }
 
-    /**
-     * Define a Server sent events endpoint without a handler.
-     * Clients connected to this server will only be able to receive message via {@link SseBroadcaster#broadcast(String)}
-     *
-     * @param url The url this endpoint will be available
-     */
+    /// Registers a Server-Sent Events endpoint at the given URL with no connect handler.
+    ///
+    /// @param url the relative URL
+    /// @return the broadcaster used to push events to connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(String url) {
         return sse(url, sse -> {
         });
     }
 
-    /**
-     * Define a Server sent events endpoint without a handler.
-     *
-     * @param url            The url this endpoint will be available
-     * @param maxConnections Maximum number of concurrent SSE connections allowed
-     */
+    /// Registers a Server-Sent Events endpoint at the given URL with a maximum connection limit.
+    ///
+    /// @param url            the relative URL
+    /// @param maxConnections maximum number of concurrent SSE connections allowed
+    /// @return the broadcaster used to push events to connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(String url, int maxConnections) {
         return sse(url, sse -> {
         }, maxConnections);
     }
 
-    /**
-     * Define a Server sent events endpoint with a specified handler. Supports path variables
-     * Data can be broadcast to this endpoint by using {@link io.joshworks.snappy.sse.SseContext} or {@link io.joshworks.snappy.sse.SseBroadcaster}
-     * The handler is the handler is called when the connection is established
-     *
-     * @param handler Endpoint handler
-     */
+    /// Registers a Server-Sent Events endpoint at the root path (`/`) with a connect handler.
+    ///
+    /// The `handler` is called each time a client establishes an SSE connection.
+    /// Events can be sent via [SseContext][io.joshworks.snappy.sse.SseContext] or the returned [SseBroadcaster].
+    ///
+    /// @param handler the handler invoked on each new SSE connection
+    /// @return the broadcaster used to push events to all connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(SseHandler handler) {
         return sse(HandlerUtil.BASE_PATH, handler);
     }
 
-    /**
-     * Define a Server sent events endpoint with a specified handler. Supports path variables
-     *
-     * @param handler        Endpoint handler
-     * @param maxConnections Maximum number of concurrent SSE connections allowed
-     */
+    /// Registers a Server-Sent Events endpoint at the root path with a connect handler and connection limit.
+    ///
+    /// @param handler        the handler invoked on each new SSE connection
+    /// @param maxConnections maximum number of concurrent SSE connections allowed
+    /// @return the broadcaster used to push events to connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(SseHandler handler, int maxConnections) {
         return sse(HandlerUtil.BASE_PATH, handler, maxConnections);
     }
 
-    /**
-     * Define a Server sent events endpoint with a specified handler. Supports path variables
-     * Data can be broadcast to this endpoint by using {@link io.joshworks.snappy.sse.SseContext} or {@link io.joshworks.snappy.sse.SseBroadcaster}
-     * The handler is the handler is called when the connection is established
-     *
-     * @param url     The relative URL to be map this endpoint.
-     * @param handler Endpoint handler
-     */
+    /// Registers a Server-Sent Events endpoint at the given URL with a connect handler.
+    ///
+    /// @param url     the relative URL
+    /// @param handler the handler invoked on each new SSE connection
+    /// @return the broadcaster used to push events to connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(String url, SseHandler handler) {
         return sse(url, handler, SseBroadcaster.DEFAULT_MAX_CONNECTIONS);
     }
 
-    /**
-     * Define a Server sent events endpoint with a specified handler. Supports path variables
-     * Data can be broadcast to this endpoint by using {@link io.joshworks.snappy.sse.SseContext} or {@link io.joshworks.snappy.sse.SseBroadcaster}
-     * The handler is the handler is called when the connection is established
-     *
-     * @param url            The relative URL to be map this endpoint.
-     * @param handler        Endpoint handler
-     * @param maxConnections Maximum number of concurrent SSE connections allowed
-     */
+    /// Registers a Server-Sent Events endpoint at the given URL with a connect handler and connection limit.
+    ///
+    /// @param url            the relative URL
+    /// @param handler        the handler invoked on each new SSE connection
+    /// @param maxConnections maximum number of concurrent SSE connections allowed
+    /// @return the broadcaster used to push events to connected clients
+    /// @throws IllegalStateException if the server is already running
     public static synchronized SseBroadcaster sse(String url, SseHandler handler, int maxConnections) {
         checkStarted();
         SseBroadcaster broadcaster = new SseBroadcaster(maxConnections);
@@ -635,42 +765,43 @@ public class SnappyServer {
         return broadcaster;
     }
 
-    /**
-     * Serve static files from a given url. Path variables are not supported.
-     *
-     * @param url     The relative URL to be map this endpoint.
-     * @param docPath The relative path to the classpath.
-     */
+    /// Serves static files from `docPath` on the classpath under the given URL prefix.
+    ///
+    /// `index.html` is served automatically for directory requests.
+    /// Path variables are **not** supported for static file endpoints.
+    ///
+    /// @param url     the URL prefix, e.g. `"/static"`
+    /// @param docPath the classpath-relative folder, e.g. `"public"`
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void staticFiles(String url, String docPath) {
         checkStarted();
         instance().endpoints.add(HandlerUtil.staticFiles(url, docPath));
     }
 
-    /**
-     * Serve static files from a given url from the default "/static" folder in the classpath. Path variables are not supported.
-     *
-     * @param url The relative URL to be map this endpoint.
-     */
+    /// Serves static files from the default `static` classpath folder under the given URL prefix.
+    ///
+    /// @param url the URL prefix, e.g. `"/"`
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void staticFiles(String url) {
         checkStarted();
         instance().endpoints.add(HandlerUtil.staticFiles(url));
     }
 
-    /**
-     * Register a server startup listener that executes after all resources and extensions are loaded.
-     *
-     * @param task the {@link Runnable} to be executed.
-     */
+    /// Registers a listener that is called once after the server has fully started.
+    ///
+    /// All endpoints, parsers, and interceptors are active when this listener fires.
+    ///
+    /// @param task the task to execute on startup
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void onStart(Runnable task) {
         checkStarted();
         instance().startListeners.add(task);
     }
 
-    /**
-     * Register a server shutdown listener that executes after all resources have been shut down.
-     *
-     * @param task the {@link Runnable} to be executed.
-     */
+    /// Registers a listener that is called once after the server has fully stopped.
+    ///
+    /// @param task the task to execute on shutdown
+    /// @throws IllegalStateException if the server is already running
     public static synchronized void onShutdown(Runnable task) {
         checkStarted();
         instance().shutdownListeners.add(task);
