@@ -2,7 +2,7 @@
 
 if [ -z "$1" ]
   then
-    echo "No version supplied"
+    echo "No version provided. Usage: ./release.sh <version>"
     exit 1
 fi
 
