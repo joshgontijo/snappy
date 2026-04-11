@@ -7,7 +7,14 @@
 
     <groupId>io.joshworks.snappy</groupId>
     <artifactId>snappy</artifactId>
-    <version>0.7.0-SNAPSHOT</version>
+    <version>0.7.0</version>
+
+    <scm>
+        <connection>scm:git:git@github.com:josueeduardo/snappy.git</connection>
+        <developerConnection>scm:git:git@github.com:josueeduardo/snappy.git</developerConnection>
+        <url>https://github.com/josueeduardo/snappy</url>
+        <tag>HEAD</tag>
+    </scm>
 
     <properties>
         <maven.compiler.source>25</maven.compiler.source>
@@ -76,16 +83,6 @@
                     <argLine>-Dfile.encoding=UTF-8</argLine>
                 </configuration>
             </plugin>
-        </plugins>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>true</filtering>
-            </resource>
-        </resources>
-    </build>
-    <build>
-        <plugins>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
@@ -120,6 +117,12 @@
                 </executions>
             </plugin>
         </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
     </build>
 
     <profiles>
