@@ -65,7 +65,7 @@ public class HandlerManager {
 
         for (MappedEndpoint me : mappedEndpoints) {
 
-            InterceptorHandler interceptor = new InterceptorHandler(me.handler, interceptors.requestInterceptors(), interceptors.responseInterceptors());
+            InterceptorHandler interceptor = new InterceptorHandler(me.handler, interceptors.requestInterceptors(), interceptors.responseInterceptors(), exceptionMapper);
 
             if (MappedEndpoint.Type.REST.equals(me.type)) {
                 HttpHandler httpDispatcher =
@@ -100,7 +100,7 @@ public class HandlerManager {
 
         HttpHandler handler = resolveHandlers(routingRestHandler, websocketHandler, staticHandler, mappedEndpoints);
 
-        handler = wrapRootInterceptorHandler(handler, interceptors);
+        handler = wrapRootInterceptorHandler(handler, interceptors, exceptionMapper);
         handler = wrapServerName(handler);
         handler = wrapRequestDump(handler, httpTracer);
 
@@ -111,12 +111,12 @@ public class HandlerManager {
         return HandlerUtil.BASE_PATH.equals(basePath) ? me.url : basePath + me.url;
     }
 
-    private static HttpHandler wrapRootInterceptorHandler(HttpHandler original, Interceptors interceptors) {
+    private static HttpHandler wrapRootInterceptorHandler(HttpHandler original, Interceptors interceptors, ExceptionMapper exceptionMapper) {
         if (interceptors.rootRequestInterceptors().isEmpty()) {
             return original;
         }
         //No point in having response root interceptor since the response will be already completed
-        return new InterceptorHandler(original, interceptors.rootRequestInterceptors(), new ArrayList<>());
+        return new InterceptorHandler(original, interceptors.rootRequestInterceptors(), new ArrayList<>(), exceptionMapper);
     }
 
     private static HttpHandler wrapCompressionHandler(HttpHandler original, MappedEndpoint endpoint) {

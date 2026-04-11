@@ -568,14 +568,32 @@ public class SnappyServer {
     }
 
     /**
+     * Define a Server sent events endpoint without a handler at base path.
+     *
+     * @param maxConnections Maximum number of concurrent SSE connections allowed
+     */
+    public static synchronized SseBroadcaster sse(int maxConnections) {
+        return sse(HandlerUtil.BASE_PATH, sse -> {}, maxConnections);
+    }
+
+    /**
      * Define a Server sent events endpoint without a handler.
      * Clients connected to this server will only be able to receive message via {@link SseBroadcaster#broadcast(String)}
      *
      * @param url The url this endpoint will be available
      */
     public static synchronized SseBroadcaster sse(String url) {
-        return sse(url, sse -> {
-        });
+        return sse(url, sse -> {});
+    }
+
+    /**
+     * Define a Server sent events endpoint without a handler.
+     *
+     * @param url            The url this endpoint will be available
+     * @param maxConnections Maximum number of concurrent SSE connections allowed
+     */
+    public static synchronized SseBroadcaster sse(String url, int maxConnections) {
+        return sse(url, sse -> {}, maxConnections);
     }
 
     /**
@@ -591,6 +609,16 @@ public class SnappyServer {
 
     /**
      * Define a Server sent events endpoint with a specified handler. Supports path variables
+     *
+     * @param handler        Endpoint handler
+     * @param maxConnections Maximum number of concurrent SSE connections allowed
+     */
+    public static synchronized SseBroadcaster sse(SseHandler handler, int maxConnections) {
+        return sse(HandlerUtil.BASE_PATH, handler, maxConnections);
+    }
+
+    /**
+     * Define a Server sent events endpoint with a specified handler. Supports path variables
      * Data can be broadcast to this endpoint by using {@link io.joshworks.snappy.sse.SseContext} or {@link io.joshworks.snappy.sse.SseBroadcaster}
      * The handler is the handler is called when the connection is established
      *
@@ -598,8 +626,21 @@ public class SnappyServer {
      * @param handler Endpoint handler
      */
     public static synchronized SseBroadcaster sse(String url, SseHandler handler) {
+        return sse(url, handler, SseBroadcaster.DEFAULT_MAX_CONNECTIONS);
+    }
+
+    /**
+     * Define a Server sent events endpoint with a specified handler. Supports path variables
+     * Data can be broadcast to this endpoint by using {@link io.joshworks.snappy.sse.SseContext} or {@link io.joshworks.snappy.sse.SseBroadcaster}
+     * The handler is the handler is called when the connection is established
+     *
+     * @param url            The relative URL to be map this endpoint.
+     * @param handler        Endpoint handler
+     * @param maxConnections Maximum number of concurrent SSE connections allowed
+     */
+    public static synchronized SseBroadcaster sse(String url, SseHandler handler, int maxConnections) {
         checkStarted();
-        SseBroadcaster broadcaster = new SseBroadcaster();
+        SseBroadcaster broadcaster = new SseBroadcaster(maxConnections);
         instance().endpoints.add(HandlerUtil.sse(url, handler, broadcaster));
         return broadcaster;
     }
@@ -694,7 +735,7 @@ public class SnappyServer {
 
             server = serverBuilder
                     .addHttpListener(port, bindAddress, rootHandler)
-                    .addHttpListener(adminManager.getPort(), adminManager.getBindAddress(), adminManager.resolveHandlers())
+                    .addHttpListener(adminManager.getPort(), adminManager.getBindAddress(), adminManager.resolveHandlers(exceptionMapper))
                     .build();
 
             server.start();
@@ -774,7 +815,6 @@ public class SnappyServer {
                 server.stop();
                 shutdownWorkers();
 
-                server.stop();
 
                 INSTANCE = null;
                 started = false;

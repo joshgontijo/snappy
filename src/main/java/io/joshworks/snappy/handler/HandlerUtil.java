@@ -219,12 +219,16 @@ public class HandlerUtil {
             return false;
         }
         for (String reqType : contentType) {
-            MediaType type = MediaType.valueOf(reqType);
-            if (MediaType.MULTIPART_FORM_DATA_TYPE.isCompatible(type)) {
-                return true;
-            }
-            if (MediaType.APPLICATION_FORM_URLENCODED_TYPE.isCompatible(type)) {
-                return true;
+            try {
+                MediaType type = MediaType.valueOf(reqType);
+                if (MediaType.MULTIPART_FORM_DATA_TYPE.isCompatible(type)) {
+                    return true;
+                }
+                if (MediaType.APPLICATION_FORM_URLENCODED_TYPE.isCompatible(type)) {
+                    return true;
+                }
+            } catch (IllegalArgumentException ignored) {
+                // Malformed Content-Type header — skip
             }
         }
         return false;

@@ -44,8 +44,8 @@ public class AppProperties {
         InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(PROPERTIES_NAME);
         if (is != null) {
             logger.info("Loading {}", PROPERTIES_NAME);
-            try {
-                properties.load(is);
+            try (InputStream stream = is) {
+                properties.load(stream);
             } catch (IOException e) {
                 throw new RuntimeException("Error while loading " + PROPERTIES_NAME, e);
             }
@@ -81,7 +81,12 @@ public class AppProperties {
 
     public static Optional<Integer> getInt(String key) {
         Optional<String> value = get(key);
-        return value.map(Integer::parseInt);
+        try {
+            return value.map(Integer::parseInt);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid integer value for property '{}': {}", key, value.orElse(null));
+            return Optional.empty();
+        }
     }
 
     public static Optional<Boolean> getBoolean(String key) {
@@ -89,11 +94,23 @@ public class AppProperties {
     }
 
     public static Optional<Double> getDouble(String key) {
-        return get(key).map(Double::parseDouble);
+        Optional<String> value = get(key);
+        try {
+            return value.map(Double::parseDouble);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid double value for property '{}': {}", key, value.orElse(null));
+            return Optional.empty();
+        }
     }
 
     public static Optional<Long> getLong(String key) {
-        return get(key).map(Long::parseLong);
+        Optional<String> value = get(key);
+        try {
+            return value.map(Long::parseLong);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid long value for property '{}': {}", key, value.orElse(null));
+            return Optional.empty();
+        }
     }
 
     public static Optional<String> get(String key) {

@@ -24,8 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import static io.joshworks.snappy.SnappyServer.*;
 
@@ -36,7 +35,7 @@ public class Parsers {
 
     private static final Logger logger = LoggerFactory.getLogger(LOGGER_NAME);
 
-    static final SortedMap<MediaType, Parser> available = new TreeMap<>(new MostSpecificMediaTypeComparator());
+    static final ConcurrentSkipListMap<MediaType, Parser> available = new ConcurrentSkipListMap<>(new MostSpecificMediaTypeComparator());
 
     private Parsers() {
 

@@ -46,11 +46,11 @@ public class AdminManager {
 
     }
 
-    HttpHandler resolveHandlers() {
+    HttpHandler resolveHandlers(ExceptionMapper exceptionMapper) {
         if (adminPage != null) {
             endpoints.add(adminPage);
         }
-        return HandlerManager.createRootHandler(endpoints, interceptors, new ExceptionMapper(), HandlerUtil.BASE_PATH, false);
+        return HandlerManager.createRootHandler(endpoints, interceptors, exceptionMapper, HandlerUtil.BASE_PATH, false);
     }
 
     public void addEndpoint(MappedEndpoint endpoint) {

@@ -33,7 +33,11 @@ public class HeaderUtils {
     static MediaType contentType(HeaderMap headers) {
         HeaderValues contentType = headers.get(Headers.CONTENT_TYPE);
         if (contentType != null && !contentType.isEmpty()) {
-            return MediaType.valueOf(contentType.getFirst());
+            try {
+                return MediaType.valueOf(contentType.getFirst());
+            } catch (IllegalArgumentException ignored) {
+                // Malformed Content-Type — fall through to wildcard
+            }
         }
         return MediaType.WILDCARD_TYPE;
     }

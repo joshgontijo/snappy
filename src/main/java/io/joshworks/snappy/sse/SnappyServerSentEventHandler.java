@@ -25,6 +25,7 @@ import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.sse.ServerSentEventConnection;
 import io.undertow.util.Headers;
 import io.undertow.util.PathTemplateMatch;
+import io.undertow.util.StatusCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xnio.ChannelExceptionHandler;
@@ -55,6 +56,13 @@ public class SnappyServerSentEventHandler implements HttpHandler {
 
     @Override
     public void handleRequest(final HttpServerExchange exchange) throws Exception {
+        if (broadcaster.isFull()) {
+            logger.warn("SSE connection limit reached ({}), rejecting new connection from {}",
+                    SseBroadcaster.DEFAULT_MAX_CONNECTIONS, exchange.getSourceAddress());
+            exchange.setStatusCode(StatusCodes.SERVICE_UNAVAILABLE);
+            exchange.endExchange();
+            return;
+        }
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/event-stream; charset=UTF-8");
         exchange.setPersistent(false);
         final StreamSinkChannel sink = exchange.getResponseChannel();

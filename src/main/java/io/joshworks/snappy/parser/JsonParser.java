@@ -28,7 +28,6 @@ import java.lang.reflect.Type;
 public class JsonParser implements Parser {
 
     private final Gson gson = new Gson();
-    private final com.google.gson.JsonParser parser = new com.google.gson.JsonParser();
 
     @Override
     public <T> T readValue(String value, Class<T> valueType) {
@@ -47,7 +46,7 @@ public class JsonParser implements Parser {
         }
 
         if (input instanceof String) {
-            input = parser.parse((String) input);
+            input = com.google.gson.JsonParser.parseString((String) input);
         }
 
         return gson.toJson(input);

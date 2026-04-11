@@ -82,7 +82,13 @@ public class ConnegHandler extends ChainHandler {
 
     private void invalidMediaType(HttpServerExchange exchange, HttpString headerName) throws UnsupportedMediaType {
         HeaderValues headerValues = exchange.getRequestHeaders().get(headerName);
-        exchange.setStatusCode(StatusCodes.UNSUPPORTED_MEDIA_TYPE);
+        // Content-Type mismatch → 415 Unsupported Media Type
+        // Accept mismatch       → 406 Not Acceptable
+        if (Headers.ACCEPT.equals(headerName)) {
+            exchange.setStatusCode(StatusCodes.NOT_ACCEPTABLE);
+        } else {
+            exchange.setStatusCode(StatusCodes.UNSUPPORTED_MEDIA_TYPE);
+        }
         throw UnsupportedMediaType.unsuportedMediaType(headerValues, produces);
     }
 

@@ -36,13 +36,14 @@ public class InterceptorHandler extends ChainHandler {
     private static final Logger logger = LoggerFactory.getLogger(LOGGER_NAME);
     private final List<RequestInterceptor> requestInterceptors;
     private final List<ResponseInterceptor> responseInterceptors;
-    private final ExceptionMapper exceptionMapper = new ExceptionMapper();
+    private final ExceptionMapper exceptionMapper;
     public static final String MESSAGE = "Error handling interceptor, request will not proceed";
 
-    public InterceptorHandler(HttpHandler next, List<RequestInterceptor> requestInterceptors, List<ResponseInterceptor> responseInterceptors) {
+    public InterceptorHandler(HttpHandler next, List<RequestInterceptor> requestInterceptors, List<ResponseInterceptor> responseInterceptors, ExceptionMapper exceptionMapper) {
         super(next);
         this.requestInterceptors = requestInterceptors;
         this.responseInterceptors = responseInterceptors;
+        this.exceptionMapper = exceptionMapper;
     }
 
     @Override
@@ -69,7 +70,7 @@ public class InterceptorHandler extends ChainHandler {
                     return false;
                 }
             } catch (Exception ex) {
-                String errorId = String.valueOf(System.currentTimeMillis());
+                String errorId = ErrorContext.errorId();
                 logger.error(HandlerUtil.exceptionMessageTemplate(errorId, exchange, MESSAGE), ex);
                 Response response = exceptionMapper.apply(errorId, ex, context);
                 response.handle(exchange);

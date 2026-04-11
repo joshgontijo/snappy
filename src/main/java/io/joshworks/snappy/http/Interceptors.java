@@ -63,10 +63,13 @@ public class Interceptors {
 
     public static RequestInterceptor cors() {
         return new RequestInterceptor("/*", (req) -> {
+            // Always add the Allow-Origin header so all cross-origin responses are valid
+            req.responseHeader("Access-Control-Allow-Origin", "*");
+            // Note: Access-Control-Allow-Credentials: true is incompatible with wildcard origin per spec
+
             if (req.method().equalsIgnoreCase(Methods.OPTIONS_STRING)) {
+                // Preflight: respond with allowed methods/headers and return 200
                 Response response = Response.ok()
-                        .header("Access-Control-Allow-Origin", "*")
-                        .header("Access-Control-Allow-Credentials", "true")
                         .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
                         .header("Access-Control-Allow-Headers", "Origin, Accept, X-Requested-With, Content-Type, Authorization, Access-Control-Request-Method, Access-Control-Request-Headers");
                 req.abortWith(response);
@@ -104,7 +107,11 @@ public class Interceptors {
                 return false;
             }
             String decoded = new String(Base64.getDecoder().decode(value), StandardCharsets.UTF_8);
-            String[] split = decoded.split(":");
+            // Limit to 2 parts so passwords containing ':' are handled correctly
+            String[] split = decoded.split(":", 2);
+            if (split.length != 2) {
+                return false; // malformed credentials
+            }
             return userPswAuthenticator.test(split[0], split[1]);
         });
     }

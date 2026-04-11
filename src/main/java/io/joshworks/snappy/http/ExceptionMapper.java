@@ -22,15 +22,15 @@ import io.joshworks.snappy.http.body.BodyReadException;
 import io.undertow.util.StatusCodes;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by Josh Gontijo on 3/15/17.
  */
 public class ExceptionMapper {
 
-    private final Map<Class<? extends Exception>, ErrorHandler> mappers = new HashMap<>();
+    private final Map<Class<? extends Exception>, ErrorHandler> mappers = new ConcurrentHashMap<>();
 
 
     private static final ErrorHandler<Exception> fallbackInternalError = (e, req) ->
@@ -59,15 +59,14 @@ public class ExceptionMapper {
     private static ErrorHandler<IOException> ioExceptionHandler() {
         return (ioex, req) -> {
             try {
-                //request too large
-                //from UndertowMessages.MESSAGES
-                if (ioex.exception.getMessage().startsWith("UT000020")) {
+                // "UT000020" is Undertow's request-too-large message code
+                String msg = ioex.exception.getMessage();
+                if (msg != null && (msg.contains("UT000020") || msg.contains("request entity too large"))) {
                     return Response.withStatus(StatusCodes.REQUEST_ENTITY_TOO_LARGE)
                             .type(MediaType.APPLICATION_JSON_TYPE)
                             .body(ExceptionResponse.of(ioex));
                 }
             } catch (Exception ignored) {
-
             }
             return fallbackInternalError.apply(new ErrorContext<>(ioex.id, ioex.exception), req);
         };
@@ -79,10 +78,9 @@ public class ExceptionMapper {
                 if (brex.exception.getCause() == null) {
                     return fallbackInternalError.apply(new ErrorContext<>(brex.id, brex.exception), req);
                 }
-
-                //request too large
-                //from UndertowMessages.MESSAGES
-                if (brex.exception.getCause().getMessage().startsWith("UT000020")) {
+                // "UT000020" is Undertow's request-too-large message code
+                String msg = brex.exception.getCause().getMessage();
+                if (msg != null && (msg.contains("UT000020") || msg.contains("request entity too large"))) {
                     return Response.withStatus(StatusCodes.REQUEST_ENTITY_TOO_LARGE)
                             .type(MediaType.APPLICATION_JSON_TYPE)
                             .body(ExceptionResponse.of(new ErrorContext<>(brex.id, (Exception) brex.exception.getCause())));

@@ -57,9 +57,9 @@ public final class Part {
         this.name = name;
         HeaderMap headers = formValue.getHeaders();
         contentType = getMediaType(headers);
-        isFile = formValue.isFile();
+        isFile = formValue.isFileItem();
         if (isFile) {
-            Path path = formValue.getPath();
+            Path path = formValue.getFileItem().getFile();
             String fileName = formValue.getFileName();
             long size = getSize(path);
             partFile = new PartFile(path, fileName, size, contentType);

@@ -19,6 +19,16 @@ public class RequestContext extends Request {
         this.response = requireNonNull(response, "Response must not be null");
     }
 
+    public RequestContext responseHeader(String name, String value) {
+        exchange.getResponseHeaders().put(HttpString.tryFromString(name), value);
+        return this;
+    }
+
+    public RequestContext responseHeader(String name, long value) {
+        exchange.getResponseHeaders().put(HttpString.tryFromString(name), value);
+        return this;
+    }
+
     public RequestContext header(String name, String value) {
         exchange.getRequestHeaders().put(HttpString.tryFromString(name), value);
         return this;
@@ -31,7 +41,7 @@ public class RequestContext extends Request {
 
     public RequestContext cookie(Cookie cookie) {
         if (cookie != null) {
-            exchange.getRequestCookies().put(cookie.getName(), cookie);
+            exchange.setRequestCookie(cookie);
         }
         return this;
     }

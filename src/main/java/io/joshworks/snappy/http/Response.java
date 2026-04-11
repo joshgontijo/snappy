@@ -157,7 +157,8 @@ public class Response {
     }
 
     public static Response internalServerError(String errorId, Exception e) {
-        return internalServerError().body(new ExceptionResponse(errorId, e == null ? "INTERNAL_SERVER_ERROR" : e.getMessage()));
+        // Do not expose raw exception message — use error ID for log correlation only
+        return internalServerError().body(new ExceptionResponse(errorId, "An error occurred. Reference ID: " + errorId));
     }
 
     public static Response unauthorized() {
@@ -303,7 +304,7 @@ public class Response {
             exchange.getResponseHeaders().putAll(header.getHeaderName(), header);
         }
 
-        exchange.getResponseCookies().putAll(cookies);
+        cookies.values().forEach(exchange::setResponseCookie);
         exchange.setStatusCode(status);
 
         body.handle(exchange, this);
@@ -374,7 +375,9 @@ public class Response {
 
                 HeaderValues contentDisposition = response.headers.get(Headers.CONTENT_DISPOSITION);
                 if (contentDisposition == null || contentDisposition.isEmpty()) {
-                    response.headers.add(Headers.CONTENT_DISPOSITION, "filename=" + fileName);
+                    // Sanitize filename: remove CR, LF and double-quotes to prevent header injection
+                    String safeFileName = fileName.replaceAll("[\\r\\n\"\\\\]", "_");
+                    response.headers.add(Headers.CONTENT_DISPOSITION, "attachment; filename=\"" + safeFileName + "\"");
                 }
                 response.headers.add(Headers.CONTENT_LENGTH, file.length());
 

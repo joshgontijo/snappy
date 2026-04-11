@@ -160,7 +160,7 @@ public class MediaType {
      */
     private static final String SUBTYPE_SEPARATOR = "/";
     private static final String PARAMETERS_SEPARATOR = ";";
-    private static MimeMappings mimeMappings = MimeMappings.builder().build();
+    private static final MimeMappings mimeMappings = MimeMappings.builder().build();
     private String type;
     private String subtype;
     private Map<String, String> parameters = new HashMap<>();

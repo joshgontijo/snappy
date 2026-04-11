@@ -34,6 +34,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -79,7 +80,7 @@ public class Body {
         byte[] rawBody;
         try {
             rawBody = ParserUtil.getBytes(is);
-            return new String(rawBody);
+            return new String(rawBody, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new BodyReadException(e);
         }
@@ -145,16 +146,24 @@ public class Body {
 
     private String getCharset() {
         String charset = "UTF-8";
-        HeaderValues encodings = requestHeaders.get(Headers.CONTENT_ENCODING);
-        if (encodings != null && encodings.isEmpty()) {
-            charset = encodings.getFirst();
+        // Charset lives in Content-Type, e.g. "application/json; charset=UTF-8"
+        HeaderValues contentType = requestHeaders.get(Headers.CONTENT_TYPE);
+        if (contentType != null && !contentType.isEmpty()) {
+            String ct = contentType.getFirst();
+            if (ct != null && ct.contains("charset=")) {
+                String[] parts = ct.split("charset=");
+                if (parts.length == 2) {
+                    charset = parts[1].split(";")[0].trim();
+                }
+            }
         }
         return charset;
     }
 
     private InputStream getRequestInputStream(HttpServerExchange exchange) {
         try {
-            if (ParserUtil.isGzipped(exchange.getResponseHeaders().get(Headers.CONTENT_ENCODING))) {
+            // Check request headers (not response) for Content-Encoding
+            if (ParserUtil.isGzipped(exchange.getRequestHeaders().get(Headers.CONTENT_ENCODING))) {
                 return new GZIPInputStream(exchange.getInputStream());
             }
             return exchange.getInputStream();
@@ -163,4 +172,3 @@ public class Body {
         }
     }
 }
-

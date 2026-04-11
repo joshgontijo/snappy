@@ -75,6 +75,9 @@ public class Request {
     public Map<String, String> pathParameters() {
         PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
         Map<String, String> parameters = new HashMap<>();
+        if (pathMatch == null) {
+            return parameters;
+        }
         for (String key : pathMatch.getParameters().keySet()) {
             parameters.put(key, pathMatch.getParameters().get(key));
         }
@@ -83,6 +86,9 @@ public class Request {
 
     public String pathParameter(String parameterName) {
         PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+        if (pathMatch == null) {
+            return null;
+        }
         return pathMatch.getParameters().get(parameterName);
     }
 
@@ -108,11 +114,15 @@ public class Request {
     }
 
     public Cookie cookie(String key) {
-        return exchange.getRequestCookies().get(key);
+        return exchange.getRequestCookie(key);
     }
 
     public Map<String, Cookie> cookies() {
-        return exchange.getRequestCookies();
+        Map<String, Cookie> result = new HashMap<>();
+        for (Cookie cookie : exchange.requestCookies()) {
+            result.put(cookie.getName(), cookie);
+        }
+        return result;
     }
 
     public String protocol() {

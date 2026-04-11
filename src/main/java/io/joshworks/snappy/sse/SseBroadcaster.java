@@ -30,8 +30,24 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SseBroadcaster {
 
+    public static final int DEFAULT_MAX_CONNECTIONS = 1000;
+
     private final ConcurrentHashMap<ServerSentEventConnection, SseContext> connections = new ConcurrentHashMap<>();
     private final Map<String, Set<SseContext>> broadcastGroups = new ConcurrentHashMap<>();
+    private final int maxConnections;
+
+    public SseBroadcaster() {
+        this(DEFAULT_MAX_CONNECTIONS);
+    }
+
+    public SseBroadcaster(int maxConnections) {
+        if (maxConnections <= 0) throw new IllegalArgumentException("maxConnections must be > 0");
+        this.maxConnections = maxConnections;
+    }
+
+    public boolean isFull() {
+        return connections.size() >= maxConnections;
+    }
 
 
     public void broadcast(String data) {

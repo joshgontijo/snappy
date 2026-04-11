@@ -1,5 +1,7 @@
 package io.joshworks.snappy.http;
 
+import java.util.UUID;
+
 public class ErrorContext<T extends Exception> {
 
     public final String id;
@@ -11,7 +13,7 @@ public class ErrorContext<T extends Exception> {
     }
 
     static String errorId() {
-        return String.valueOf(System.currentTimeMillis());
+        return UUID.randomUUID().toString();
     }
 
 }
