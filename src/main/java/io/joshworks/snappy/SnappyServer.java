@@ -17,9 +17,6 @@
 
 package io.joshworks.snappy;
 
-import io.joshworks.snappy.ext.ExtensionProxy;
-import io.joshworks.snappy.ext.ServerData;
-import io.joshworks.snappy.ext.SnappyExtension;
 import io.joshworks.snappy.handler.HandlerManager;
 import io.joshworks.snappy.handler.HandlerUtil;
 import io.joshworks.snappy.handler.MappedEndpoint;
@@ -82,7 +79,6 @@ public class SnappyServer {
     private static final Logger logger = LoggerFactory.getLogger(LOGGER_NAME);
 
     private final AdminManager adminManager = new AdminManager();
-    private final ExtensionProxy extensions = new ExtensionProxy();
     private XnioWorker worker;
 
     //--------------------------------------------
@@ -258,15 +254,6 @@ public class SnappyServer {
         HandlerUtil.group(groupPath, group);
     }
 
-    /**
-     * Register a new Extension that will be executed on startup. Extensions allows the implementation to change the server behavior.
-     *
-     * @param extension The extension to be registered
-     */
-    public static synchronized void register(SnappyExtension extension) {
-        checkStarted();
-        instance().extensions.register(extension);
-    }
 
     /**
      * Adds an interceptor that executes before any other handler.
@@ -719,9 +706,6 @@ public class SnappyServer {
                     .setServerOption(UndertowOptions.MAX_ENTITY_SIZE, maxEntitySize);
 
 
-            //Extension are capable of adding / removing mapped endpoints,
-            // therefore they must execute before the handler resolution
-            bootstrapExtensions();
 
             Info.httpConfig(bindAddress, port, adminManager.getBindAddress(), adminManager.getPort(), httpTracer);
             Info.serverConfig(optionBuilder);
@@ -760,15 +744,10 @@ public class SnappyServer {
         //http
         int offset = AppProperties.getInt(PropertyKey.HTTP_PORT_OFFSET).orElse(0);
         int port = this.port + offset;
-        int adminPort = this.adminManager.getPort() + offset;
 
         this.port = AppProperties.getInt(PropertyKey.HTTP_PORT).orElse(port);
         this.httpTracer = AppProperties.getBoolean(PropertyKey.HTTP_TRACER).orElse(this.httpTracer);
         this.bindAddress = AppProperties.get(PropertyKey.HTTP_BIND_ADDRESS).orElse(this.bindAddress);
-
-        //admin http
-        this.adminManager.setPort(AppProperties.getInt(PropertyKey.ADMIN_HTTP_PORT).orElse(adminPort));
-        this.adminManager.setBindAddress(AppProperties.get(PropertyKey.ADMIN_HTTP_BIND_ADDRESS).orElse(this.adminManager.getBindAddress()));
 
         //xnio
         OptionMap map = optionBuilder.getMap();
@@ -793,31 +772,16 @@ public class SnappyServer {
     //sets the properties that are may be useful outside the application
     private void exportDefaultProperties() {
         AppProperties.set(PropertyKey.HTTP_PORT, String.valueOf(this.port));
-        AppProperties.set(PropertyKey.ADMIN_HTTP_PORT, String.valueOf(this.adminManager.getPort()));
     }
 
-    private void bootstrapExtensions() {
-        extensions.onStart(
-                new ServerData(port,
-                        bindAddress,
-                        httpTracer,
-                        maxMultipartSize,
-                        interceptors,
-                        exceptionMapper,
-                        basePath,
-                        adminManager,
-                        endpoints));
-    }
 
     private void stopServer() {
         try {
             if (server != null && started) {
                 logger.info("Stopping server...");
 
-                shutdownExtensions();
                 server.stop();
                 shutdownWorkers();
-
 
                 INSTANCE = null;
                 started = false;
@@ -830,13 +794,6 @@ public class SnappyServer {
         }
     }
 
-    private void shutdownExtensions() {
-        try {
-            extensions.onShutdown();
-        } catch (Exception e) {
-            logger.error("Error shutting down extensions", e);
-        }
-    }
 
     private void shutdownWorkers() {
         try {

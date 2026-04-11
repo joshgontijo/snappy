@@ -29,10 +29,6 @@ public final class PropertyKey {
     public static final String HTTP_TRACER = "http.tracer";
     public static final String TCP_NO_DELAY = "tcp.nodelay";
 
-    //admin
-    public static final String ADMIN_HTTP_PORT = "admin.http.port";
-    public static final String ADMIN_HTTP_BIND_ADDRESS = "admin.http.bind";
-
     //xnio
     public static final String XNIO_IO_THREADS = "xnio.io.threads";
     public static final String XNIO_MAX_WORKER_THREAD = "xnio.worker.maxThread";
