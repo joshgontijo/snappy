@@ -25,10 +25,10 @@ if git rev-parse "$VERSION" >/dev/null 2>&1; then
 fi
 if git ls-remote --tags origin "$VERSION" | grep -q "$VERSION"; then
   echo "Tag $VERSION already exists on remote, deleting"
-  git push origin --delete "$VERSION" || true
+  git push origin --delete "refs/tags/$VERSION" || true
 fi
 git tag -a "$VERSION" -m "Release $VERSION"
-git push origin "$VERSION"
+git push origin "refs/tags/$VERSION"
 
 # Deploy and release to Sonatype
 mvn clean deploy -P release
