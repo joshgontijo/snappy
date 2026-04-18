@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 if [ -z "$1" ]
   then
@@ -6,21 +7,30 @@ if [ -z "$1" ]
     exit 1
 fi
 
-echo "Releasing version $1"
+VERSION=$1
+echo "Releasing version $VERSION"
 
 mvn clean install
 
-mvn versions:set -DgenerateBackupPoms=false -DnewVersion=$1
+mvn versions:set -DgenerateBackupPoms=false -DnewVersion=$VERSION
 
-git commit -a -m "Release $1"
+git commit -a -m "Release $VERSION"
 git push origin master
 
-git tag -a $1 -m "Release $1"
-git push origin $1
+# Idempotent tag: delete existing tag locally and remotely before re-creating
+if git rev-parse "$VERSION" >/dev/null 2>&1; then
+  echo "Tag $VERSION already exists locally, deleting and re-creating"
+  git tag -d "$VERSION"
+fi
+if git ls-remote --tags origin "$VERSION" | grep -q "$VERSION"; then
+  echo "Tag $VERSION already exists on remote, deleting"
+  git push origin --delete "$VERSION" || true
+fi
+git tag -a "$VERSION" -m "Release $VERSION"
+git push origin "$VERSION"
 
-
+# Deploy and release to Sonatype
 mvn clean deploy -P release
-mvn nexus-staging:release -P release
+mvn nexus-staging:release -P release -DserverId=sonatype -DnexusUrl=https://s01.oss.sonatype.org/
 
-# Note: Be sure that the local Maven settings.xml file is configured with the right credentials, and that the system has the right GPG keys installed (along with a valid GPG installation)
-# Now go to https://oss.sonatype.org/index.html and release it
+echo "Release $VERSION completed successfully"
