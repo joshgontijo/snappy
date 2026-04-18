@@ -14,8 +14,9 @@ mvn clean install
 
 mvn versions:set -DgenerateBackupPoms=false -DnewVersion=$VERSION
 
-git commit -a -m "Release $VERSION"
-git push origin master
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git diff --quiet && git diff --cached --quiet || git commit -a -m "Release $VERSION"
+git push origin "$BRANCH"
 
 # Idempotent tag: delete existing tag locally and remotely before re-creating
 if git rev-parse "$VERSION" >/dev/null 2>&1; then
