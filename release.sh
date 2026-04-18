@@ -30,8 +30,7 @@ fi
 git tag -a "$VERSION" -m "Release $VERSION"
 git push origin "refs/tags/$VERSION"
 
-# Deploy and release to Sonatype
+# Deploy and publish to Sonatype Central
 mvn clean deploy -P release
-mvn nexus-staging:release -P release -DserverId=sonatype -DnexusUrl=https://s01.oss.sonatype.org/
 
 echo "Release $VERSION completed successfully"
