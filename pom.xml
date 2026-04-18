@@ -9,6 +9,25 @@
     <artifactId>snappy</artifactId>
     <version>0.7.0</version>
 
+    <name>snappy</name>
+    <description>A lightweight REST framework for Java built on top of Undertow</description>
+    <url>https://github.com/josueeduardo/snappy</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>joshgontijo</id>
+            <name>Josh Gontijo</name>
+            <email>josue.gontijo@pm.me</email>
+        </developer>
+    </developers>
+
     <scm>
         <connection>scm:git:git@github.com:josueeduardo/snappy.git</connection>
         <developerConnection>scm:git:git@github.com:josueeduardo/snappy.git</developerConnection>
