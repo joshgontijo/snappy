@@ -7,7 +7,7 @@
 
     <groupId>io.joshworks.snappy</groupId>
     <artifactId>snappy</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
 
     <name>snappy</name>
     <description>A lightweight REST framework for Java built on top of Undertow</description>
@@ -86,7 +86,7 @@
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>1.4.12</version>
+            <version>1.5.18</version>
             <scope>test</scope>
         </dependency>
 
