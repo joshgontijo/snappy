@@ -34,6 +34,8 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Type;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -145,19 +147,23 @@ public class Body {
     }
 
     private String getCharset() {
-        String charset = "UTF-8";
-        // Charset lives in Content-Type, e.g. "application/json; charset=UTF-8"
         HeaderValues contentType = requestHeaders.get(Headers.CONTENT_TYPE);
         if (contentType != null && !contentType.isEmpty()) {
             String ct = contentType.getFirst();
             if (ct != null && ct.contains("charset=")) {
                 String[] parts = ct.split("charset=");
                 if (parts.length == 2) {
-                    charset = parts[1].split(";")[0].trim();
+                    String candidate = parts[1].split(";")[0].trim();
+                    try {
+                        if (Charset.isSupported(candidate)) {
+                            return candidate;
+                        }
+                    } catch (IllegalCharsetNameException ignored) {
+                    }
                 }
             }
         }
-        return charset;
+        return StandardCharsets.UTF_8.name();
     }
 
     private InputStream getRequestInputStream(HttpServerExchange exchange) {
