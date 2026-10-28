@@ -53,9 +53,11 @@ public class Body {
     private final InputStream is;
     private final HeaderMap requestHeaders;
     private final MediaType negotiatedConsumeType;
+    private final long maxEntitySize;
 
     public Body(HttpServerExchange exchange) {
         this.requestHeaders = exchange.getRequestHeaders();
+        this.maxEntitySize = exchange.getMaxEntitySize();
         this.is = getRequestInputStream(exchange);
 
         ConnegHandler.NegotiatedMediaType negotiatedMediaType = exchange.getAttachment(ConnegHandler.NEGOTIATED_MEDIA_TYPE);
@@ -168,13 +170,16 @@ public class Body {
 
     private InputStream getRequestInputStream(HttpServerExchange exchange) {
         try {
+            InputStream stream = exchange.getInputStream();
             // Check request headers (not response) for Content-Encoding
             if (ParserUtil.isGzipped(exchange.getRequestHeaders().get(Headers.CONTENT_ENCODING))) {
-                return new GZIPInputStream(exchange.getInputStream());
+                stream = new GZIPInputStream(stream);
             }
-            return exchange.getInputStream();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get request InputStream", e);
+            // Undertow limits the compressed wire size; the decompressed size must be limited too,
+            // otherwise a small gzip bomb can exhaust the heap.
+            return maxEntitySize > 0 ? new BoundedInputStream(stream, maxEntitySize) : stream;
+        } catch (IOException e) {
+            throw new BodyReadException(e);
         }
     }
 }

@@ -27,6 +27,8 @@ public final class PropertyKey {
     public static final String HTTP_PORT_OFFSET = "http.portOffset";
     public static final String HTTP_BIND_ADDRESS = "http.bind";
     public static final String HTTP_TRACER = "http.tracer";
+    public static final String HTTP_REQUEST_PARSE_TIMEOUT = "http.requestParseTimeout";
+    public static final String HTTP_NO_REQUEST_TIMEOUT = "http.noRequestTimeout";
     public static final String TCP_NO_DELAY = "tcp.nodelay";
 
     //xnio

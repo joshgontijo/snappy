@@ -3,6 +3,7 @@ package io.joshworks.snappy.it;
 import io.joshworks.restclient.http.Unirest;
 import io.joshworks.stream.client.StreamClient;
 import io.joshworks.stream.client.sse.SSEConnection;
+import io.undertow.util.Headers;
 import org.junit.AfterClass;
 import org.junit.Test;
 
@@ -42,6 +43,8 @@ public class ServerSentEventTests {
             start();
 
             StreamClient.sse("http://localhost:9000/sse")
+                    // stream-client sets Host to the full URL; use a valid authority instead
+                    .header(Headers.HOST, "localhost:9000")
                     .onEvent(e -> {
                         receivedMessage.set(e.data);
                         latch.countDown();
@@ -61,6 +64,7 @@ public class ServerSentEventTests {
     public void on_close_is_called_when_channel_is_closed() throws Exception {
         long keepAlive = 1000;
         CountDownLatch latch = new CountDownLatch(1);
+        CountDownLatch opened = new CountDownLatch(1);
         try {
             sse("/sse", sse -> {
                 sse.keepAlive(keepAlive);
@@ -79,8 +83,17 @@ public class ServerSentEventTests {
             start();
 
             SSEConnection connection = StreamClient.sse("http://localhost:9000/sse")
+                    // stream-client sets Host to the full URL; use a valid authority instead
+                    .header(Headers.HOST, "localhost:9000")
+                    .onOpen(opened::countDown)
                     .onEvent(System.out::println)
                     .connect();
+
+            // Make sure the server has accepted the stream before closing it, otherwise the
+            // close can race with connection registration and the server-side callback never fires.
+            if (!opened.await(2, TimeUnit.SECONDS)) {
+                fail("Connection not opened");
+            }
             connection.close();
 
             if (!latch.await(keepAlive * 3, TimeUnit.MILLISECONDS)) {

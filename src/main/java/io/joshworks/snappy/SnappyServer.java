@@ -100,6 +100,9 @@ public class SnappyServer {
 
     public static final String LOGGER_NAME = "snappy";
     private static final int DEFAULT_PORT = 9000;
+    private static final int DEFAULT_REQUEST_PARSE_TIMEOUT = 30_000;
+    private static final int DEFAULT_NO_REQUEST_TIMEOUT = 60_000;
+    private static final long DEFAULT_MAX_MULTIPART_SIZE = 10L * 1024 * 1024;
 
     private static final Logger logger = LoggerFactory.getLogger(LOGGER_NAME);
 
@@ -125,11 +128,13 @@ public class SnappyServer {
     private final Interceptors interceptors = new Interceptors();
     private String basePath = BASE_PATH;
     private boolean started = false;
+    private int requestParseTimeout = DEFAULT_REQUEST_PARSE_TIMEOUT;
+    private int noRequestTimeout = DEFAULT_NO_REQUEST_TIMEOUT;
 
     private static final Object LOCK = new Object();
     private static volatile SnappyServer INSTANCE;
     private long maxEntitySize = DEFAULT_MAX_ENTITY_SIZE;
-    private long maxMultipartSize;
+    private long maxMultipartSize = DEFAULT_MAX_MULTIPART_SIZE;
 
 
     private SnappyServer() {
@@ -203,6 +208,30 @@ public class SnappyServer {
     public static synchronized void readTimeout(int timeout) {
         checkStarted();
         instance().optionBuilder.set(Options.READ_TIMEOUT, timeout);
+    }
+
+    /// Sets the maximum time in milliseconds allowed to receive and parse request headers.
+    ///
+    /// This mitigates Slowloris-style attacks where a client holds a connection open by
+    /// sending request headers very slowly. Defaults to `30000` ms; `0` disables the timeout.
+    ///
+    /// @param timeout request parse timeout in milliseconds
+    /// @throws IllegalStateException if the server is already running
+    public static synchronized void requestParseTimeout(int timeout) {
+        checkStarted();
+        instance().requestParseTimeout = timeout;
+    }
+
+    /// Sets the maximum time in milliseconds an idle connection may wait for a new request.
+    ///
+    /// This bounds keep-alive connections that never send another request. Defaults to
+    /// `60000` ms; `0` disables the timeout.
+    ///
+    /// @param timeout idle-connection timeout in milliseconds
+    /// @throws IllegalStateException if the server is already running
+    public static synchronized void noRequestTimeout(int timeout) {
+        checkStarted();
+        instance().noRequestTimeout = timeout;
     }
 
     /// Controls whether the server socket address can be reused immediately after the server stops.
@@ -834,7 +863,9 @@ public class SnappyServer {
             worker = Xnio.getInstance().createWorker(optionBuilder.getMap());
             Undertow.Builder serverBuilder = Undertow.builder()
                     .setWorker(worker)
-                    .setServerOption(UndertowOptions.MAX_ENTITY_SIZE, maxEntitySize);
+                    .setServerOption(UndertowOptions.MAX_ENTITY_SIZE, maxEntitySize)
+                    .setServerOption(UndertowOptions.REQUEST_PARSE_TIMEOUT, requestParseTimeout)
+                    .setServerOption(UndertowOptions.NO_REQUEST_TIMEOUT, noRequestTimeout);
 
 
 
@@ -879,6 +910,8 @@ public class SnappyServer {
         this.port = AppProperties.getInt(PropertyKey.HTTP_PORT).orElse(port);
         this.httpTracer = AppProperties.getBoolean(PropertyKey.HTTP_TRACER).orElse(this.httpTracer);
         this.bindAddress = AppProperties.get(PropertyKey.HTTP_BIND_ADDRESS).orElse(this.bindAddress);
+        this.requestParseTimeout = AppProperties.getInt(PropertyKey.HTTP_REQUEST_PARSE_TIMEOUT).orElse(this.requestParseTimeout);
+        this.noRequestTimeout = AppProperties.getInt(PropertyKey.HTTP_NO_REQUEST_TIMEOUT).orElse(this.noRequestTimeout);
 
         //xnio
         OptionMap map = optionBuilder.getMap();

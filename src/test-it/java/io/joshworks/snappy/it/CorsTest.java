@@ -74,16 +74,14 @@ public class CorsTest {
     }
 
     @Test //only beforeAll will be applied anyway
-    public void cors_allowCrendetials() {
+    public void cors_doesNotCombineWildcardWithCredentials() {
         HttpResponse<String> response = Unirest.options(SERVER_URL + "/a").asString();
         Assert.assertEquals(200, response.getStatus());
 
         Headers headers = response.getHeaders();
 
         List<String> allowCredentials = headers.get("Access-Control-Allow-Credentials");
-        assertNotNull(allowCredentials);
-        assertEquals(1, allowCredentials.size());
-        assertTrue(Boolean.parseBoolean(allowCredentials.get(0)));
+        assertTrue(allowCredentials == null || allowCredentials.isEmpty());
     }
 
     @Test //only beforeAll will be applied anyway
