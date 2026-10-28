@@ -393,6 +393,8 @@ http.port=8080
 http.bind=0.0.0.0
 http.portOffset=0
 http.tracer=false
+http.requestParseTimeout=30000
+http.noRequestTimeout=60000
 
 xnio.io.threads=4
 xnio.worker.coreThread=4
@@ -409,7 +411,9 @@ All configuration methods must be called **before** `start()`.
 port(8080);
 address("127.0.0.1");
 maxEntitySize(1024 * 1024);         // 1 MB request body limit
-maxMultipartSize(10 * 1024 * 1024); // 10 MB per part
+maxMultipartSize(10 * 1024 * 1024); // 10 MB per part (default)
+requestParseTimeout(30_000);        // max time to receive request headers (default)
+noRequestTimeout(60_000);           // max idle time between requests (default)
 workerThreads(4, 40);
 enableTracer();                     // logs every exchange at DEBUG level
 

@@ -19,11 +19,13 @@ package io.joshworks.snappy.http;
 
 import io.joshworks.snappy.handler.UnsupportedMediaType;
 import io.joshworks.snappy.http.body.BodyReadException;
+import io.joshworks.snappy.http.body.RequestBodyTooLargeException;
 import io.undertow.util.StatusCodes;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.ZipException;
 
 /**
  * Created by Josh Gontijo on 3/15/17.
@@ -33,8 +35,17 @@ public class ExceptionMapper {
     private final Map<Class<? extends Exception>, ErrorHandler> mappers = new ConcurrentHashMap<>();
 
 
+    private static final String INTERNAL_ERROR_MESSAGE = "Internal Server Error";
+
+    // Never expose internal exception class names or messages to clients. Details are logged
+    // by HttpEntrypoint; the correlation id can be used to find the matching server log entry.
     private static final ErrorHandler<Exception> fallbackInternalError = (e, req) ->
             Response.internalServerError()
+                    .type(MediaType.APPLICATION_JSON_TYPE)
+                    .body(new ExceptionResponse(e.id, INTERNAL_ERROR_MESSAGE));
+
+    private static final ErrorHandler<RequestBodyTooLargeException> bodyTooLarge = (e, req) ->
+            Response.withStatus(StatusCodes.REQUEST_ENTITY_TOO_LARGE)
                     .type(MediaType.APPLICATION_JSON_TYPE)
                     .body(ExceptionResponse.of(e));
 
@@ -54,17 +65,19 @@ public class ExceptionMapper {
         mappers.put(Exception.class, fallbackInternalError);
         mappers.put(IOException.class, ioExceptionHandler());
         mappers.put(BodyReadException.class, bodyReadException());
+        mappers.put(RequestBodyTooLargeException.class, bodyTooLarge);
     }
 
     private static ErrorHandler<IOException> ioExceptionHandler() {
         return (ioex, req) -> {
             try {
+                if (ioex.exception instanceof RequestBodyTooLargeException) {
+                    return tooLarge(ioex.id, ioex.exception);
+                }
                 // "UT000020" is Undertow's request-too-large message code
                 String msg = ioex.exception.getMessage();
                 if (msg != null && (msg.contains("UT000020") || msg.contains("request entity too large"))) {
-                    return Response.withStatus(StatusCodes.REQUEST_ENTITY_TOO_LARGE)
-                            .type(MediaType.APPLICATION_JSON_TYPE)
-                            .body(ExceptionResponse.of(ioex));
+                    return tooLarge(ioex.id, ioex.exception);
                 }
             } catch (Exception ignored) {
             }
@@ -75,21 +88,34 @@ public class ExceptionMapper {
     private static ErrorHandler<BodyReadException> bodyReadException() {
         return (brex, req) -> {
             try {
-                if (brex.exception.getCause() == null) {
+                Throwable cause = brex.exception.getCause();
+                if (cause == null) {
                     return fallbackInternalError.apply(new ErrorContext<>(brex.id, brex.exception), req);
                 }
-                // "UT000020" is Undertow's request-too-large message code
-                String msg = brex.exception.getCause().getMessage();
-                if (msg != null && (msg.contains("UT000020") || msg.contains("request entity too large"))) {
-                    return Response.withStatus(StatusCodes.REQUEST_ENTITY_TOO_LARGE)
+                if (cause instanceof RequestBodyTooLargeException) {
+                    return tooLarge(brex.id, (Exception) cause);
+                }
+                if (cause instanceof ZipException) {
+                    return Response.badRequest()
                             .type(MediaType.APPLICATION_JSON_TYPE)
-                            .body(ExceptionResponse.of(new ErrorContext<>(brex.id, (Exception) brex.exception.getCause())));
+                            .body(new ExceptionResponse(brex.id, "Invalid request body"));
+                }
+                // "UT000020" is Undertow's request-too-large message code
+                String msg = cause.getMessage();
+                if (msg != null && (msg.contains("UT000020") || msg.contains("request entity too large"))) {
+                    return tooLarge(brex.id, (Exception) cause);
                 }
             } catch (Exception e) {
                 return Response.internalServerError();
             }
-            return Response.internalServerError();
+            return fallbackInternalError.apply(new ErrorContext<>(brex.id, brex.exception), req);
         };
+    }
+
+    private static Response tooLarge(String id, Exception exception) {
+        return Response.withStatus(StatusCodes.REQUEST_ENTITY_TOO_LARGE)
+                .type(MediaType.APPLICATION_JSON_TYPE)
+                .body(new ExceptionResponse(id, exception.getMessage()));
     }
 
     public <T extends Exception> ErrorHandler<T> getOrFallback(T ex) {

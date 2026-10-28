@@ -214,6 +214,16 @@ public class HandlerUtil {
     }
 
     private static boolean formData(HttpServerExchange exchange) {
+        // Only parse form bodies for methods that are expected to carry one. Parsing on GET/HEAD
+        // allows an unauthenticated client to force multipart/form-data processing (CVE-2026-3260).
+        HttpString method = exchange.getRequestMethod();
+        if (!Methods.POST.equals(method)
+                && !Methods.PUT.equals(method)
+                && !Methods.PATCH.equals(method)
+                && !Methods.DELETE.equals(method)) {
+            return false;
+        }
+
         HeaderValues contentType = exchange.getRequestHeaders().get(Headers.CONTENT_TYPE);
         if (contentType == null) {
             return false;

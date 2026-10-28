@@ -63,14 +63,14 @@ public class Interceptors {
 
     public static RequestInterceptor cors() {
         return new RequestInterceptor("/*", (req) -> {
+            // A wildcard origin must not be combined with credentials: browsers reject the
+            // combination, and it is unsafe for applications that rely on credentialed CORS.
             req.responseHeader("Access-Control-Allow-Origin", "*");
-            req.responseHeader("Access-Control-Allow-Credentials", "true");
 
             if (req.method().equalsIgnoreCase(Methods.OPTIONS_STRING)) {
                 // Preflight: respond with allowed methods/headers and return 200
                 Response response = Response.ok()
                         .header("Access-Control-Allow-Origin", "*")
-                        .header("Access-Control-Allow-Credentials", "true")
                         .header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
                         .header("Access-Control-Allow-Headers", "Origin, Accept, X-Requested-With, Content-Type, Authorization, Access-Control-Request-Method, Access-Control-Request-Headers");
                 req.abortWith(response);

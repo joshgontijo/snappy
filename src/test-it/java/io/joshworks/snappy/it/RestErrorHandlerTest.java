@@ -122,7 +122,8 @@ public class RestErrorHandlerTest {
 
             ExceptionResponse body = response.body();
             assertNotNull(body);
-            assertEquals(EXCEPTION_MESSAGE, body.message);
+            // Unexpected exceptions must not leak their internal class/message to clients.
+            assertEquals("Internal Server Error", body.message);
 
         } catch (Exception e) {
             e.printStackTrace();
